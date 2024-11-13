@@ -15,7 +15,7 @@ app.use(cors());
 // Option 2: Allow Custom Origins
 // app.use(
 //   cors({
-//     origin: 'http://54.227.41.192',
+//     origin: 'http://3.87.244.28',
 //     methods: ['GET', 'POST', 'PUT', 'DELETE'],
 //     allowedHeaders: ['Content-Type'],
 //   })

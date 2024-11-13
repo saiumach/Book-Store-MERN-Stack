@@ -1,0 +1,71 @@
+name: Deploy Backend and Frontend to EC2
+
+on:
+  push:
+    branches:
+      - main  # Adjust the branch as needed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Set up SSH agent and add the SSH private key from GitHub Secrets
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+    # Step 2: Deploy and update the backend on EC2
+    - name: Update and Restart Backend on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+        # Navigate to the existing backend directory
+        cd /home/ec2-user/backend  # Adjust the path as needed
+
+        # Pull the latest changes from the repository
+        git pull origin main
+
+        # Ensure Node.js 18 or higher is installed
+        if ! command -v node &> /dev/null || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
+          curl -sL https://rpm.nodesource.com/setup_18.x | sudo bash -
+          sudo yum install -y nodejs || sudo apt-get install -y nodejs
+        fi
+
+        # Install npm dependencies
+        npm install
+
+        # Start or restart the backend using PM2
+        if ! command -v pm2 &> /dev/null; then
+          sudo npm install -g pm2
+        fi
+        pm2 restart backend-app || pm2 start index.js --name "backend-app"  # Replace `index.js` with your main backend file
+        pm2 save
+        EOF
+
+    # Step 3: Deploy and update the frontend on EC2
+    - name: Update and Deploy Frontend on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+        # Navigate to the existing frontend directory
+        cd /home/ec2-user/frontend  # Adjust the path as needed
+
+        # Pull the latest changes from the repository
+        git pull origin main
+
+        # Ensure Node.js 18 or higher is installed
+        if ! command -v node &> /dev/null || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 18 ]; then
+          curl -sL https://rpm.nodesource.com/setup_18.x | sudo bash -
+          sudo yum install -y nodejs || sudo apt-get install -y nodejs
+        fi
+
+        # Install npm dependencies and build the frontend
+        npm install
+        npm run build
+
+        # Move built files to /var/www/html
+        sudo mv build/* /var/www/html/
+
+        # Restart Nginx to serve the updated frontend
+        sudo systemctl restart nginx
+        EOF
